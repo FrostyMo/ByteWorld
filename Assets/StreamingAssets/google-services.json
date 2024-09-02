@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "929591456768",
+    "project_id": "byteworld-dissertation",
+    "storage_bucket": "byteworld-dissertation.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:929591456768:android:2da459cb3fd61e417614e5",
+        "android_client_info": {
+          "package_name": "com.momin.byteworld"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBb1uSurYwj13hzP82M__fBg8fUSU0HWjE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
