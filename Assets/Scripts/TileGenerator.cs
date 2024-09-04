@@ -1,3 +1,4 @@
+//using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -48,12 +49,16 @@ public class TileGenerator : MonoBehaviour
     void Start()
     {
         PathGenerated = false;
+        if (GameController.Instance == null && levelNumber == Level.Random)
+        {
+            levelNumber = Level.Level11;
+        }
+
         if (levelNumber != Level.Random) {
             StartCoroutine(GenerateHardCodedPath(levelNumber));
         }
         else
         {
-
             StartCoroutine(GeneratePathWithLoading());
         }
         
@@ -68,7 +73,7 @@ public class TileGenerator : MonoBehaviour
         yield return null;
 
         PathGenerated = true;
-
+        APIManager.API.StartLevel();
         LevelManager.ShowLevelDialog(level);
 
         //GameStateManager.Instance.SetGameState(GameState.Playing);
@@ -153,6 +158,7 @@ public class TileGenerator : MonoBehaviour
 
     IEnumerator GeneratePathWithLoading()
     {
+        
         Debug.Log("In GeneratePathWithLoading with game state: " + GameStateManager.Instance);
         numberOfTiles = GameController.Instance.numberOfTiles;
         GameStateManager.Instance.SetGameState(GameState.GeneratingPath);
@@ -399,9 +405,9 @@ public class TileGenerator : MonoBehaviour
             requiredMoves += consecutiveForwards;
             allowedMoves += consecutiveForwards;
         }
-
-        PlayerMovement.requiredMoves = requiredMoves;
-        PlayerMovement.allowedMoves = allowedMoves;
+        FindObjectOfType<PlayerMovement>().SetMovesAllowed(allowedMoves, requiredMoves);
+        //PlayerMovement.requiredMoves = requiredMoves;
+        //PlayerMovement.allowedMoves = allowedMoves;
     }
 
 

@@ -71,6 +71,17 @@ public class RandomGameOptions : MonoBehaviour
         // Hide the popup
         gameObject.SetActive(false);
 
+        RandomGameOptionsSet selectedOptions = new RandomGameOptionsSet
+        {
+            specialTile = specialTileToggle.isOn,
+            secureTile = secureTileToggle.isOn,
+            detours = detourToggle.isOn,
+            limitedLives = limitedLivesToggle.isOn
+        };
+
+
+        // Start the random game session and pass the options
+        APIManager.API.StartRandomGameSession(selectedOptions, numberOfTiles);
         // Load the Level scene
         UnityEngine.SceneManagement.SceneManager.LoadScene("Level1");
     }

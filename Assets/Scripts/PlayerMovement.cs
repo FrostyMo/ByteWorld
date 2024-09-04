@@ -17,14 +17,15 @@ public class PlayerMovement : MonoBehaviour
     public GameObject parent;
     private Rigidbody parentBody;
 
-    public static int allowedMoves = 5; // Total allowed moves per level
-    public static int requiredMoves = 2; // These are minimum number of moves the level will have (only for non random levels).
+    private static int allowedMoves = 0; // Total allowed moves per level
+    private static int requiredMoves = 0; // These are minimum number of moves the level will have (only for non random levels).
 
-    private int movesTaken = 0; // Moves taken by the player
+    private static int movesTaken = 0; // Moves taken by the player
     private int totalSteps = 0; // Moves but loop steps are counted full too
     private int currentTileNumber = 0; // Add this field to track the current tile number
     private int totalScore = 0;
     private int scoreStreak = 1;
+    GameData gameData;
 
 
     public TextMeshProUGUI movesText; // UI Text to display moves
@@ -105,23 +106,11 @@ public class PlayerMovement : MonoBehaviour
         Debug.Log("Inside Execute Movements. Move counts: " + movements.Count);
         while (movements.Count > 0)
         {
-            //string move = movements[0];
+            
             Move currentMove = movements[0];
             movements.RemoveAt(0);
 
-            //if (move == "W")
-            //{
-            //    yield return StartCoroutine(MoveForward());
-            //}
-            //else if (move == "D")
-            //{
-            //    yield return StartCoroutine(TurnRight());
-            //}
-            //else if (move == "A")
-            //{
-            //    yield return StartCoroutine(TurnLeft());
-            //}
-            //totalSteps++;
+            // If there's a loop for this move
             for (int i = 0; i < currentMove.Count; i++)
             {
                 if (currentMove.Direction == "W")
@@ -157,7 +146,8 @@ public class PlayerMovement : MonoBehaviour
         conditions = newConditions;
     }
 
-
+    // This region contains moveleft, moveright and moveforward functions
+    #region MoveWAD
     private IEnumerator MoveForward()
     {
         parentBody.useGravity = false;
@@ -170,7 +160,7 @@ public class PlayerMovement : MonoBehaviour
             yield break; // Stop movement if the tile was visited before
         }
 
-
+        //AudioManager.instance.PlayWhoosh();
         float elapsedTime = 0;
         while (elapsedTime < moveDuration)
         {
@@ -178,6 +168,7 @@ public class PlayerMovement : MonoBehaviour
             elapsedTime += Time.deltaTime;
             yield return null;
         }
+        
 
         parent.transform.position = endPos;
         visitedPositions.Add(endPos); // Mark the new position as visited
@@ -191,6 +182,15 @@ public class PlayerMovement : MonoBehaviour
         Tile currentTile = GetTileAtPosition(endPos);
         if (currentTile != null)
         {
+            switch (currentTile.Type)
+            {
+                case TileType.Frozen:
+                    AudioManager.instance.PlayFreeze();
+                    break;
+                case TileType.Lava:
+                    AudioManager.instance.PlayFire();
+                    break;
+            }
             if (applicableCondition != null)
             {
                 ApplyAction(applicableCondition);
@@ -199,6 +199,7 @@ public class PlayerMovement : MonoBehaviour
                 {
                     if (currentTile.Type != TileType.Normal)
                     {
+                        AudioManager.instance.PlayBonus();
                         scoreStreak++;
                     }
                 }
@@ -217,10 +218,9 @@ public class PlayerMovement : MonoBehaviour
                 }
                 RevertToNormalArmor();
             }
+            
+            
         }
-        
-
-        
 
         UpdateMovesText();
         // Call the updated CalculateScore method
@@ -281,6 +281,7 @@ public class PlayerMovement : MonoBehaviour
         CalculateTileScore(currentTile);
         CheckMoveLimit();
     }
+    #endregion
 
     private void UpdateMovesText()
     {
@@ -335,7 +336,6 @@ public class PlayerMovement : MonoBehaviour
     }
 
 
-
     private IEnumerator AnimateScore(int targetScore)
     {
         if (scoreText != null)
@@ -375,16 +375,6 @@ public class PlayerMovement : MonoBehaviour
 
     public void AddMovement(string move, int count)
     {
-        //Debug.Log("Move: " + move + " and count: " + count);
-        //for (int i = 0; i < count; i++)
-        //{
-        //    movements.Add(move);
-        //}
-        //Debug.Log("Move added to movements: " + movements.Count);
-
-        //movesTaken++; // Each loop counts as one move
-        //UpdateMovesText();
-
         Debug.Log("Move: " + move + " and count: " + count);
         movements.Add(new Move(move, count));
         Debug.Log("Move added to movements: " + movements.Count);
@@ -397,8 +387,8 @@ public class PlayerMovement : MonoBehaviour
     {
         if (movesTaken > allowedMoves && GameStateManager.Instance.CurrentState != GameState.Resetting)
         {
-
-            GameStateManager.Instance.ResetGame();
+            FindObjectOfType<EndLevel>().Lose();
+            //GameStateManager.Instance.ResetGame();
         }
     }
 
@@ -601,5 +591,28 @@ public class PlayerMovement : MonoBehaviour
             }
         }
         return (isSpecialTile, correctArmor, wrongArmor, noArmor);
+    }
+
+    public void SetMovesAllowed(int allowed, int required)
+    {
+        allowedMoves = allowed;
+        requiredMoves = required;
+        UpdateMovesText();
+    }
+    public int GetAllowedMoves()
+    {
+        return allowedMoves;
+    }
+    public int GetRequiredMoves()
+    {
+        return requiredMoves;
+    }
+    public int GetMovesTaken()
+    {
+        return movesTaken;
+    }
+    public int GetTotalScore()
+    {
+        return totalScore;
     }
 }

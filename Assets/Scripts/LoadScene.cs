@@ -14,13 +14,12 @@ public class LoadScene : MonoBehaviour
     {
         if (sceneName.Equals("RandomGame"))
         {
-           
             TileGenerator.levelNumber = Level.Random;
             randomGameOptionsPopup.SetActive(true);
         }
         else
         {
-            TileGenerator.levelNumber = Level.Level1;
+            TileGenerator.levelNumber = Level.Level11;
             UnityEngine.Debug.Log("Button clicked, loading scene: " + sceneName);
             SceneManager.LoadScene(sceneName); // Correct method name
         }

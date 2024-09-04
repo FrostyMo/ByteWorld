@@ -8,9 +8,9 @@ public class Goal : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-
+        
+        AudioManager.instance.PlayWin();
+            
         endLevelScript.Win();
-   
-
     }
 }

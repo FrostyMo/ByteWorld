@@ -1,54 +1,81 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using Firebase;
+using UnityEngine;
+using TMPro;
+using Firebase.Extensions;
 using Firebase.Auth;
 using Firebase.Database;
-using Firebase.Extensions;
-using TMPro;
-using UnityEngine;
-
+using System.Collections;
+using Newtonsoft.Json;
 
 [Serializable]
-public class dataToSave
+public class GameData
 {
-    public string userName;
-    //public List<> totalCoins;
-    public int crrLevel;
-    public int highScore;//and many more
-
+    public int allowedMoves;
+    public int attempts;
+    public bool cleared;
+    public int score;  // Individual playthrough score
+    public int leastMoves;
+    public int requiredMoves;
+    public int timeSpent; // in seconds
 }
 
 [Serializable]
 public class LevelData
 {
-    public int allowedMoves;
-    public int attempts;
-    public bool cleared;
-    public int highestScore;
-    public int leastMoves;
-    public int requiredMoves;
+    public List<GameData> plays = new List<GameData>();  // List of all playthroughs
+    public int highestScore;  // Highest score across all attempts
+    public int totalTimeForLevel; // Total time spent on this level across all playthroughs
 }
 
 [Serializable]
-public class GameData
+public class NormalGameData
 {
-    public Dictionary<string, LevelData> normalgame = new Dictionary<string, LevelData>();
+    public Dictionary<string, LevelData> levels = new Dictionary<string, LevelData>();
+}
+
+[Serializable]
+public class RandomGameOptionsSet
+{
+    public bool specialTile;
+    public bool secureTile;
+    public bool detours;
+    public bool limitedLives;
+}
+
+[Serializable]
+public class RandomGameSession
+{
+    public RandomGameOptionsSet optionsUsed = new RandomGameOptionsSet();
+    public int numOfTiles;
+    public int timeSpent; // in seconds
+    public int levelsWon;
+    public int levelsAttempted;
+    public Dictionary<string, GameData> games = new Dictionary<string, GameData>();
 }
 
 [Serializable]
 public class UserData
 {
-    public string userName;
-    public GameData games = new GameData();
+    public string email;
+    public NormalGameData normalgame = new NormalGameData();
+    public Dictionary<string, RandomGameSession> randomgameSessions = new Dictionary<string, RandomGameSession>();
+    public int totalGameplayTime; // in seconds
 }
 
 public class APIManager : MonoBehaviour
 {
     public static APIManager API;
-    public string userName;
-    private double time;
-    private DatabaseReference dbReference; // Firebase Database reference
+    private FirebaseAuth auth;
+    private DatabaseReference dbReference;
+    private UserData userData;
+    private string userId;
+    private string userName;
+
+    private float levelStartTime; // To track when the level starts
+    private float sessionStartTime; // To track when the random game session starts
+   
+    private string currentSessionId;
 
     [Header("Login")]
     public TMP_InputField LoginEmail;
@@ -79,8 +106,26 @@ public class APIManager : MonoBehaviour
     // all api calls to save any data
     void Start()
     {
-        time = Time.realtimeSinceStartup;
-        dbReference = FirebaseDatabase.DefaultInstance.RootReference; // Initialize the database reference
+        InitializeFirebase();
+    }
+
+    private void InitializeUserData()
+    {
+        userData = new UserData();
+        SaveUserData();
+        //SaveProgressPeriodically(); // Start periodic saving of user data
+    }
+
+    private void InitializeFirebase()
+    {
+        FirebaseDatabase.DefaultInstance.SetPersistenceEnabled(false); // Enable offline data persistence
+        auth = FirebaseAuth.DefaultInstance;
+        dbReference = FirebaseDatabase.DefaultInstance.RootReference;
+    }
+
+    public void SaveProgressPeriodically()
+    {
+        InvokeRepeating("SaveUserData", 30.0f, 30.0f); // Save data every 30 seconds
     }
 
     #region signup 
@@ -88,7 +133,7 @@ public class APIManager : MonoBehaviour
     {
         loadingScreen.SetActive(true);
 
-        FirebaseAuth auth = FirebaseAuth.DefaultInstance;
+        
         string email = SignupEmail.text;
         string password = SignupPassword.text;
         auth.CreateUserWithEmailAndPasswordAsync(email, password).ContinueWithOnMainThread(task => {
@@ -109,35 +154,24 @@ public class APIManager : MonoBehaviour
             // Firebase user has been created.
 
             loadingScreen.SetActive(false);
-            AuthResult result = task.Result;
-            Debug.LogFormat("Firebase user created successfully: {0} ({1})",
-                result.User.DisplayName, result.User.UserId);
+            
 
             SignupEmail.text = "";
             SignupPassword.text = "";
             SignupPasswordConfirm.text = "";
 
-            InitializeUserData(result.User.UserId); // Initialize user data after sign up
+            AuthResult newUser = task.Result;
+            userId = newUser.User.UserId;
+            userName = newUser.User.Email;
+            //Debug.LogFormat("Firebase user created successfully: {0} ({1})",
+            //    newUser.DisplayName, userId);
+            InitializeUserData(); // Initialize user data after sign up
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
             showLogMsg("Sign up Successful");
-            
-            
 
         });
     }
-    private void InitializeUserData(string userId)
-    {
-        UserData newUserData = new UserData();
-        newUserData.userName = userId; // or use a custom username if required
-
-        // Initialize some data if needed
-        LevelData level1 = new LevelData { allowedMoves = 2, attempts = 0, cleared = false, highestScore = 0, leastMoves = 0, requiredMoves = 1 };
-        newUserData.games.normalgame.Add("level1", level1);
-
-        // Save the initial data to Firebase
-        string json = JsonUtility.ToJson(newUserData);
-        dbReference.Child("users").Child(userId).SetRawJsonValueAsync(json);
-    }
-
+    
     #endregion
 
     #region Login
@@ -145,38 +179,21 @@ public class APIManager : MonoBehaviour
     {
         loadingScreen.SetActive(true);
 
-        FirebaseAuth auth = FirebaseAuth.DefaultInstance;
+        
         string email = LoginEmail.text;
         string password = loginPassword.text;
 
-        Credential credential =
-        EmailAuthProvider.GetCredential(email, password);
-        auth.SignInAndRetrieveDataWithCredentialAsync(credential).ContinueWithOnMainThread(task => {
-            if (task.IsCanceled)
+        auth.SignInWithEmailAndPasswordAsync(email, password).ContinueWithOnMainThread(task =>
+        {
+            if (task.IsCompleted && !task.IsCanceled && !task.IsFaulted)
             {
-                Debug.LogError("SignInAndRetrieveDataWithCredentialAsync was canceled.");
-                return;
+                loadingScreen.SetActive(false);
+                AuthResult user = task.Result;
+                userId = user.User.UserId;
+                userName = user.User.Email;
+                LoadUserData();
+                UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
             }
-            if (task.IsFaulted)
-            {
-                Debug.LogError("SignInAndRetrieveDataWithCredentialAsync encountered an error: " + task.Exception);
-                return;
-            }
-            loadingScreen.SetActive(false);
-            AuthResult result = task.Result;
-            Debug.LogFormat("User signed in successfully: {0} ({1})",
-                result.User.DisplayName, result.User.UserId);
-
-            if (!result.User.IsEmailVerified)
-            {
-                showLogMsg("Successful");
-
-                loginUi.SetActive(false);
-                //SuccessUi.SetActive(true);
-                //SuccessUi.transform.Find("Desc").GetComponent<TextMeshProUGUI>().text = "Id: " + result.User.UserId;
-            }
-            
-
         });
 
 
@@ -193,4 +210,183 @@ public class APIManager : MonoBehaviour
     }
     #endregion
 
+
+    private void LoadUserData()
+    {
+        dbReference.Child("users").Child(userId).GetValueAsync().ContinueWithOnMainThread(task =>
+        {
+            if (task.IsCompleted && !task.IsCanceled && !task.IsFaulted)
+            {
+                DataSnapshot snapshot = task.Result;
+                if (snapshot.Exists)
+                {
+                    userData = JsonConvert.DeserializeObject<UserData>(snapshot.GetRawJsonValue());
+                }
+                else
+                {
+                    InitializeUserData();
+                }
+            }
+        });
+    }
+
+    public void SaveUserData()
+    {
+        string json = JsonConvert.SerializeObject(userData);
+        Debug.Log("Saving User Data: " + json); // Log the data being saved
+        dbReference.Child("users").Child(userId).SetRawJsonValueAsync(json).ContinueWithOnMainThread(task =>
+        {
+            if (task.IsFaulted || task.IsCanceled)
+            {
+                // Retry after a delay if the save fails
+                StartCoroutine(RetrySaveUserData(json, 2.0f)); // Retry after 2 seconds
+            }
+            else if (task.IsCompleted)
+            {
+                Debug.Log("Data saved successfully.");
+            }
+        });
+    }
+
+    private IEnumerator RetrySaveUserData(string json, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        dbReference.Child("users").Child(userId).SetRawJsonValueAsync(json).ContinueWithOnMainThread(task =>
+        {
+            if (task.IsFaulted || task.IsCanceled)
+            {
+                Debug.LogError("Retry save failed again. Consider further actions.");
+            }
+            else if (task.IsCompleted)
+            {
+                Debug.Log("Data saved successfully on retry.");
+            }
+        });
+    }
+
+    public void StartLevel()
+    {
+        levelStartTime = Time.time; // Capture the start time of the level
+        userData.email = userName;
+    }
+
+    public void EndLevel(string levelName, GameData gameData)
+    {
+        float levelEndTime = Time.time;
+        gameData.timeSpent = (int)(levelEndTime - levelStartTime);
+
+        RecordNormalGameLevel(levelName, gameData);
+
+        // Add to total gameplay time
+        userData.totalGameplayTime += gameData.timeSpent;
+        SaveUserData();
+    }
+
+    public void StartRandomGameSession(RandomGameOptionsSet optionsUsed, int numOfTiles)
+    {
+        userData.email = userName;
+        // Generate a new session ID only if there isn't an ongoing session
+        if (string.IsNullOrEmpty(currentSessionId))
+        {
+            sessionStartTime = Time.time; // Capture the start time of the random game session
+            currentSessionId = Guid.NewGuid().ToString(); // Generate a unique session ID
+
+            // Initialize a new RandomGameSession with the given options
+            RandomGameSession newSession = new RandomGameSession
+            {
+                optionsUsed = optionsUsed,
+                numOfTiles = numOfTiles,
+                levelsWon = 0,
+                levelsAttempted = 0,
+                timeSpent = 0
+            };
+
+            // Add this session to the user's data
+            userData.randomgameSessions.Add(currentSessionId, newSession);
+            SaveUserData();
+        }
+    }
+
+
+    public void EndRandomGameSession(GameData gameData)
+    {
+        if (!string.IsNullOrEmpty(currentSessionId))
+        {
+            UpdateRandomGameSession(currentSessionId, gameData, false);
+            ClearCurrentSessionId();
+        }
+    }
+
+    public void UpdateRandomGameSession(string sessionId, GameData gameData, bool isWin)
+    {
+        RandomGameSession session;
+
+        // particular level time becomes current time minus previous start time
+        gameData.timeSpent = (int)(Time.time - sessionStartTime);
+        sessionStartTime = Time.time;
+        if (!userData.randomgameSessions.ContainsKey(sessionId))
+        {
+            Debug.LogWarning("Session ID not found. Creating a new session.");
+            session = new RandomGameSession();
+            session.levelsAttempted = 1;
+            session.levelsWon = isWin ? 1 : 0;
+            session.timeSpent = gameData.timeSpent;
+            session.games.Add("Level" + session.levelsAttempted, gameData);
+
+            userData.randomgameSessions[sessionId] = session;
+        }
+        else
+        {
+            session = userData.randomgameSessions[sessionId];
+            session.levelsAttempted++;
+            if (isWin) session.levelsWon++;
+            session.timeSpent += gameData.timeSpent;
+            session.games.Add("Level" + session.levelsAttempted, gameData);
+            
+        }
+        userData.totalGameplayTime += session.timeSpent;
+        SaveUserData();
+    }
+
+
+    public void RecordNormalGameLevel(string level, GameData newPlayData)
+    {
+        // Ensure the level exists
+        if (!userData.normalgame.levels.ContainsKey(level))
+        {
+            userData.normalgame.levels.Add(level, new LevelData());
+        }
+
+        LevelData levelData = userData.normalgame.levels[level];
+
+        // Add the new playthrough to the list of plays for this level
+        levelData.plays.Add(newPlayData);
+
+        // Update the highest score if the new play's score is higher
+        if (newPlayData.score > levelData.highestScore)
+        {
+            levelData.highestScore = newPlayData.score;
+        }
+
+        // Add the time spent in this playthrough to the total time for the level
+        levelData.totalTimeForLevel += newPlayData.timeSpent;
+
+    }
+
+    public void UpdateTotalGameplayTime(int time)
+    {
+        userData.totalGameplayTime += time;
+        SaveUserData();
+    }
+
+
+    public string GetCurrentSessionId()
+    {
+        return currentSessionId;
+    }
+    public void ClearCurrentSessionId()
+    {
+        currentSessionId = null;
+    }
 }

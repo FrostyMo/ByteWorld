@@ -245,12 +245,12 @@ public class GameStateManager : MonoBehaviour
         }
     }
 
-    public void LoadLevel(Level level)
+    
+    public void LevelComplete()
     {
-        TileGenerator.levelNumber = level;
-        SceneManager.LoadScene("Level1"); // Replace with your scene name
+        CurrentState = GameState.End;
+        StartCoroutine(LoadNextLevel());
     }
-
     private IEnumerator LoadNextLevel()
     {
         Level nextLevel = TileGenerator.levelNumber;
@@ -288,14 +288,19 @@ public class GameStateManager : MonoBehaviour
         {
             LoadLevel(nextLevel);
         }
+        else
+        {
+            SceneManager.LoadScene("MainMenu");
+        }
 
     }
 
-    public void LevelComplete()
+    public void LoadLevel(Level level)
     {
-        CurrentState = GameState.End;
-        StartCoroutine(LoadNextLevel());
+        TileGenerator.levelNumber = level;
+        SceneManager.LoadScene("Level1"); // Replace with your scene name
     }
+
 
     private IEnumerator ShowTextInSlowMo(string text, int seconds, bool showSeconds)
     {
@@ -324,5 +329,11 @@ public class GameStateManager : MonoBehaviour
         // Call the reset according to win or loss
         Time.timeScale = 1;
         Time.fixedDeltaTime = 0.02F;
+    }
+
+
+    public int GetRetryCount()
+    {
+        return retryCount;
     }
 }
