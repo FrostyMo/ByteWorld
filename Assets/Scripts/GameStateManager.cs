@@ -46,7 +46,7 @@ public class GameStateManager : MonoBehaviour
     private int currentMessageIndex = 0;
     private string dialogPrefKey;
 
-    private static int retryCount = 0;
+    public static int retryCount = 0;
     private const int maxRetries = 3; // Example max retries
 
     private PlayerMovement playerMovementScript;

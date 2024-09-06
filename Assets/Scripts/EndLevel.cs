@@ -21,7 +21,11 @@ public class EndLevel : MonoBehaviour
             Debug.Log("Win");
             levelCompleted = true;
             //StartCoroutine(LoadNextScene());
-            SaveGameData(true); // true means the player won
+            if (APIManager.API != null)
+            {
+                SaveGameData(true); // true means the player won
+            }
+            
             GameStateManager.Instance.LevelComplete();
             // Capture and save game data for normal or random game
             
@@ -35,11 +39,28 @@ public class EndLevel : MonoBehaviour
             Debug.Log("Lose");
             levelCompleted = true;
             // Capture and save game data for normal or random game
-            SaveGameData(false); // false means the player lost
+            if (APIManager.API != null)
+            {
+                SaveGameData(false); // true means the player won
+            }
 
             GameStateManager.Instance.ResetGame();
 
             
+        }
+    }
+    public void Quit()
+    {
+        if (!levelCompleted)
+        {
+            Debug.Log("Quit Game");
+            levelCompleted = true;
+            // Capture and save game data for normal or random game
+            if (APIManager.API != null)
+            {
+                SaveGameData(false); // true means the player won
+            }
+            GameStateManager.retryCount = 0;
         }
     }
 
@@ -69,7 +90,11 @@ public class EndLevel : MonoBehaviour
             // Handle normal game level
             string levelName = TileGenerator.levelNumber.ToString();
             APIManager.API.EndLevel(levelName, gameData);
+            Debug.Log("Score in endgame: " + gameData.score);
+            APIManager.API.UpdateHighScoresAfterLevel(levelName, gameData.score);
+            APIManager.API.StopListeningForMPHighestScoreChanges();
         }
+        
     }
 
 }

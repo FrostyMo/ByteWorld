@@ -73,7 +73,8 @@ public class TileGenerator : MonoBehaviour
         yield return null;
 
         PathGenerated = true;
-        APIManager.API.StartLevel();
+        if (APIManager.API != null)
+            APIManager.API.StartLevel();
         LevelManager.ShowLevelDialog(level);
 
         //GameStateManager.Instance.SetGameState(GameState.Playing);

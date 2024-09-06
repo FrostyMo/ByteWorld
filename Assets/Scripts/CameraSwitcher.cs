@@ -4,6 +4,7 @@ using UnityEngine;
 using TMPro;
 using System.Collections;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 public class CameraSwitcher : MonoBehaviour
 {
@@ -26,13 +27,14 @@ public class CameraSwitcher : MonoBehaviour
 
     void Start()
     {
+        // Add listener to the button
+        toggleViewButton.onClick.AddListener(ToggleView);
         mainCamera.enabled = true;
         topDownCamera.enabled = false;
         initialCameraPosition = topDownCamera.transform.position;
         UpdateViewModeText();
 
-        // Add listener to the button
-        toggleViewButton.onClick.AddListener(ToggleView);
+        
     }
 
     void Update()
@@ -132,8 +134,9 @@ public class CameraSwitcher : MonoBehaviour
         }
     }
 
-    void ToggleView()
+    public void ToggleView()
     {
+        Debug.Log("CLicked");
         isTopView = !isTopView;
         mainCamera.enabled = !isTopView;
         topDownCamera.enabled = isTopView;

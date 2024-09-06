@@ -33,6 +33,11 @@ public class PlayerMovement : MonoBehaviour
     public TextMeshProUGUI requiredMovesText; // UI Text to display moves
     public TextMeshProUGUI passCodeText; // UI Text to display moves
 
+    public TextMeshProUGUI personalHighScoreText;
+    public TextMeshProUGUI overallHighScoreText;
+    int personalHighScore;
+    int overallHighScore;
+
     //static private List<string> movements = new List<string>();
     private List<Move> movements = new List<Move>();
     private bool isResetting = false; // Flag to ensure reset is called once
@@ -68,7 +73,11 @@ public class PlayerMovement : MonoBehaviour
 
         UpdateMovesText();
         //CalculateScore(false, false, false, false);
-
+        if (TileGenerator.levelNumber != Level.Random)
+        {
+            UpdateHighScores();
+        }
+            
     }
 
     // Update is called once per frame
@@ -295,6 +304,32 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    private void UpdateHighScores()
+    {
+        if (APIManager.API != null)
+        {
+            // Fetch and update the high scores for this level
+            APIManager.API.GetHighScoresForLevel(TileGenerator.levelNumber.ToString(), SetHighScores);
+            
+            // Set up a real-time listener for changes in MP Highest Score
+            APIManager.API.ListenForMPHighestScoreChanges(TileGenerator.levelNumber.ToString(), newMPHighScore =>
+            {
+                overallHighScoreText.text = $"MP Highest Score: {newMPHighScore}";
+                Debug.Log("MP High Score updated in real-time to: " + newMPHighScore);
+                overallHighScore = newMPHighScore;
+            });
+        }
+        
+    }
+    // This method will be called once the high scores are retrieved from the APIManager
+    private void SetHighScores(int mpHighScore, int personalHighScore)
+    {
+        overallHighScoreText.text = $"MP Highest Score: {mpHighScore}";
+        personalHighScoreText.text = $"Your Highest Score: {personalHighScore}";
+        this.personalHighScore = personalHighScore;
+        overallHighScore = mpHighScore;
+    }
+
     public void CalculateTileScore(Tile currentTile)
     {
         // Give more score if moves within required moves
@@ -330,7 +365,12 @@ public class PlayerMovement : MonoBehaviour
         {
             StopCoroutine(scoreAnimationCoroutine);
         }
-
+        if (totalScore > personalHighScore)
+        {
+            personalHighScoreText.text = "Your Highest Score: " + totalScore.ToString();
+            personalHighScore = totalScore;
+        }
+        //APIManager.API.UpdatePersonalHighScore(personalHighScore);
         // Start the score animation
         scoreAnimationCoroutine = StartCoroutine(AnimateScore(totalScore));
     }

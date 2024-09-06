@@ -19,11 +19,15 @@ public class LoadScene : MonoBehaviour
         }
         else
         {
-            TileGenerator.levelNumber = Level.Level11;
+            TileGenerator.levelNumber = Level.Level1;
             UnityEngine.Debug.Log("Button clicked, loading scene: " + sceneName);
             SceneManager.LoadScene(sceneName); // Correct method name
         }
         
     }
 
+    public void DeletePreferences()
+    {
+        PlayerPrefs.DeleteAll();
+    }
 }

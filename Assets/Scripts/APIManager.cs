@@ -68,6 +68,10 @@ public class APIManager : MonoBehaviour
     public static APIManager API;
     private FirebaseAuth auth;
     private DatabaseReference dbReference;
+    private DatabaseReference mpHighestScoreRef;
+    private EventHandler<ValueChangedEventArgs> mpHighestScoreListener;
+
+
     private UserData userData;
     private string userId;
     private string userName;
@@ -76,6 +80,8 @@ public class APIManager : MonoBehaviour
     private float sessionStartTime; // To track when the random game session starts
    
     private string currentSessionId;
+    private int mpHighScore;
+    private int yourHighScore;
 
     [Header("Login")]
     public TMP_InputField LoginEmail;
@@ -106,6 +112,8 @@ public class APIManager : MonoBehaviour
     // all api calls to save any data
     void Start()
     {
+        mpHighScore = 0;
+        yourHighScore = 0;
         InitializeFirebase();
     }
 
@@ -122,6 +130,168 @@ public class APIManager : MonoBehaviour
         auth = FirebaseAuth.DefaultInstance;
         dbReference = FirebaseDatabase.DefaultInstance.RootReference;
     }
+
+    #region ScoresFetching
+
+    public void GetHighScoresForLevel(string levelName, Action<int, int> callback)
+    {
+        //int mpHighScore = 0;
+        //int personalHighScore = 0;
+
+        // Fetch MP Highest Score
+        dbReference.Child("normalgame").Child(levelName).Child("MPHighestScore").GetValueAsync().ContinueWithOnMainThread(task =>
+        {
+            if (task.IsCompleted && !task.IsCanceled && !task.IsFaulted)
+            {
+                DataSnapshot snapshot = task.Result;
+                if (snapshot.Exists)
+                {
+                    mpHighScore = Convert.ToInt32(snapshot.Value);
+                }
+            }
+
+            // Fetch Personal Highest Score
+            dbReference.Child("normalgame").Child(levelName).Child("users").Child(userId).Child("highestScore").GetValueAsync().ContinueWithOnMainThread(task2 =>
+            {
+                if (task2.IsCompleted && !task2.IsCanceled && !task2.IsFaulted)
+                {
+                    DataSnapshot snapshot2 = task2.Result;
+                    if (snapshot2.Exists)
+                    {
+                        yourHighScore = Convert.ToInt32(snapshot2.Value);
+                    }
+                }
+
+                // Pass both high scores back to PlayerMovement via callback
+                callback.Invoke(mpHighScore, yourHighScore);
+            });
+        });
+    }
+
+
+
+    public void UpdateHighScoresAfterLevel(string levelName, int currentScore)
+    {
+        // Check if the current score exceeds MP highest score and update if necessary
+        if (currentScore > mpHighScore)
+        {
+            dbReference.Child("normalgame").Child(levelName).Child("MPHighestScore").SetValueAsync(currentScore).ContinueWithOnMainThread(task =>
+            {
+                if (task.IsCompleted && !task.IsCanceled && !task.IsFaulted)
+                {
+                    Debug.Log("MP Highest Score updated successfully");
+                }
+                else
+                {
+                    Debug.LogError("Failed to update MP Highest Score.");
+                }
+            });
+        }
+
+        // Check if the current score exceeds personal highest score and update if necessary
+        if (currentScore >= yourHighScore)
+        {
+            dbReference.Child("normalgame").Child(levelName).Child("users").Child(userId).Child("highestScore").SetValueAsync(currentScore).ContinueWithOnMainThread(task =>
+            {
+                if (task.IsCompleted && !task.IsCanceled && !task.IsFaulted)
+                {
+                    Debug.Log("Personal Highest Score updated successfully");
+                }
+                else
+                {
+                    Debug.LogError("Failed to update personal Highest Score.");
+                }
+            });
+        }
+    }
+
+    //public void ListenForMPHighestScoreChanges(string levelName, Action<int> onMPHighScoreUpdated)
+    //{
+    //    // Listen for changes in the MPHighestScore
+    //    dbReference.Child("normalgame").Child(levelName).Child("MPHighestScore").ValueChanged += (object sender, ValueChangedEventArgs e) =>
+    //    {
+    //        if (e.DatabaseError != null)
+    //        {
+    //            Debug.LogError($"Failed to listen for MP highest score updates: {e.DatabaseError.Message}");
+    //            return;
+    //        }
+
+    //        if (e.Snapshot.Exists)
+    //        {
+    //            mpHighScore = Convert.ToInt32(e.Snapshot.Value);
+    //            Debug.Log("MP Highest Score updated to: " + mpHighScore);
+    //            // Call the callback to update the score in UI
+    //            onMPHighScoreUpdated?.Invoke(mpHighScore);
+    //        }
+    //    };
+    //}
+    // Listen for changes in MP Highest Score
+    public void ListenForMPHighestScoreChanges(string levelName, Action<int> onMPHighestScoreChanged)
+    {
+        mpHighestScoreRef = dbReference.Child("normalgame").Child(levelName).Child("MPHighestScore");
+
+        // Define the event listener
+        mpHighestScoreListener = (sender, e) =>
+        {
+            if (e.DatabaseError != null)
+            {
+                Debug.LogError($"Failed to listen for MP highest score updates: {e.DatabaseError.Message}");
+                return;
+            }
+
+            if (e.Snapshot.Exists)
+            {
+                mpHighScore = Convert.ToInt32(e.Snapshot.Value);
+                Debug.Log("MP Highest Score updated to: " + mpHighScore);
+
+                // Invoke the callback with the new MPHighestScore value
+                onMPHighestScoreChanged?.Invoke(mpHighScore);
+            }
+        };
+
+        // Add the listener
+        mpHighestScoreRef.ValueChanged += mpHighestScoreListener;
+    }
+
+    // Stop listening for MP Highest Score changes
+    public void StopListeningForMPHighestScoreChanges()
+    {
+        if (mpHighestScoreRef != null && mpHighestScoreListener != null)
+        {
+            mpHighestScoreRef.ValueChanged -= mpHighestScoreListener;
+            Debug.Log("Stopped listening for MP Highest Score changes.");
+        }
+    }
+
+    public void UpdatePersonalHighScore(int score)
+    {
+        if (score > yourHighScore)
+            yourHighScore = score;
+    }
+
+    //public void StopListeningForMPHighestScore(string levelName)
+    //{
+    //    dbReference.Child("normalgame").Child(levelName).Child("MPHighestScore").ValueChanged -= HandleMPHighestScoreChanged;
+    //}
+
+    private void HandleMPHighestScoreChanged(object sender, ValueChangedEventArgs e)
+    {
+        if (e.DatabaseError != null)
+        {
+            Debug.LogError($"Failed to listen for MP highest score updates: {e.DatabaseError.Message}");
+            return;
+        }
+
+        if (e.Snapshot.Exists)
+        {
+            int newMPHighScore = Convert.ToInt32(e.Snapshot.Value);
+            Debug.Log("MP Highest Score updated to: " + newMPHighScore);
+            mpHighScore = newMPHighScore;
+            // Update the high score text in the UI
+            //mpHighestScoreText.text = $"MP Highest Score: {newMPHighScore}";
+        }
+    }
+    #endregion
 
     public void SaveProgressPeriodically()
     {
